@@ -240,6 +240,7 @@
                         $cleanLabel = preg_replace('/\.[^.]+$/', '', $photoLabel);
                         $cleanLabel = str_replace(['_', '-'], ' ', $cleanLabel);
                         $formattedIndex = '#' . str_pad($index + 1, 3, '0', STR_PAD_LEFT);
+                        $isVideo = str_starts_with($photo->mime_type ?? '', 'video/');
                     @endphp
                     <div class="gallery-photo-card group bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between cursor-pointer"
                          data-label="{{ strtolower($cleanLabel) }} {{ strtolower($photo->album?->album_name ?? '') }}"
@@ -249,6 +250,7 @@
                          data-title="{{ $cleanLabel }}"
                          data-num="{{ $formattedIndex }}"
                          data-file-id="{{ $photo->drive_file_id }}"
+                         data-is-video="{{ $isVideo ? '1' : '0' }}"
                          data-download-url="{{ route('weddings.download', ['slug' => $wedding->slug, 'fileId' => $photo->drive_file_id]) }}">
                         
                         <!-- Image Container with Hover Zoom & Action Overlay -->
@@ -258,6 +260,17 @@
                                  loading="lazy"
                                  class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
                                  onerror="this.src='https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80'">
+
+                            @if($isVideo)
+                                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                    <div class="w-11 h-11 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center shadow-lg border-2 border-white/70 group-hover:scale-110 transition-transform">
+                                        <svg class="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M8 5v14l11-7z"/>
+                                        </svg>
+                                    </div>
+                                </div>
+                                <span class="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-black/70 text-white backdrop-blur-sm pointer-events-none">VIDEO</span>
+                            @endif
 
                             <!-- Hover Overlay Action Buttons -->
                             <div class="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-3">

@@ -167,7 +167,7 @@ class ClientGalleryController extends Controller
         $googleDrive->recordDownload($wedding, $fileId, $fileName, $request->ip(), $clientTime);
 
         // Kembalikan URL langsung file Google Drive untuk diunduh asinkron via JS
-        $downloadUrl = "https://drive.google.com/uc?export=download&id={$fileId}";
+        $downloadUrl = "https://drive.google.com/uc?export=download&confirm=t&id={$fileId}";
 
         return response()->json([
             'success'      => true,

@@ -209,6 +209,8 @@
                          data-title="{{ $photo->nama_file }}"
                          data-full-url="{{ $photo->thumbnail_url ?: 'https://lh3.googleusercontent.com/d/' . $photo->drive_file_id . '=w1920' }}"
                          data-file-id="{{ $photo->drive_file_id }}"
+                         data-mime-type="{{ $photo->mime_type ?? 'image/jpeg' }}"
+                         data-is-video="{{ str_starts_with($photo->mime_type ?? '', 'video/') ? '1' : '0' }}"
                          onclick="handleCardClick(event, {{ $index }})">
                         
                         <!-- Checkbox Overlay (Hanya muncul jika mode 'Pilih Foto' aktif) -->
@@ -242,15 +244,44 @@
                             </button>
                         @endif
 
-                        <!-- Photo Image (Presisi pas 100% dengan frame tanpa offset dan tanpa overlay memuat) -->
-                        <img src="{{ $photo->thumbnail_url ?: 'https://lh3.googleusercontent.com/d/' . $photo->drive_file_id . '=w800-rw' }}" 
-                             alt="{{ $photo->nama_file }}" 
-                             loading="lazy" 
-                             class="gallery-img w-full h-auto block object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-                             data-file-id="{{ $photo->drive_file_id }}"
-                             data-retry="0"
-                             onload="onImgLoaded(this)"
-                             onerror="onImgError(this)">
+                        @php
+                            $isVideo = str_starts_with($photo->mime_type ?? '', 'video/');
+                        @endphp
+
+                        @if($isVideo)
+                            {{-- Video: Tampilkan thumbnail + play button overlay --}}
+                            <div class="relative w-full" style="min-height: 140px;">
+                                <img src="{{ $photo->thumbnail_url ?: 'https://lh3.googleusercontent.com/d/' . $photo->drive_file_id . '=w800-rw' }}"
+                                     alt="{{ $photo->nama_file }}"
+                                     loading="lazy"
+                                     class="gallery-img w-full h-auto block object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                                     data-file-id="{{ $photo->drive_file_id }}"
+                                     data-retry="0"
+                                     data-is-video="1"
+                                     onload="onImgLoaded(this)"
+                                     onerror="onImgError(this)">
+                                {{-- Play Button Overlay --}}
+                                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                    <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center shadow-xl border-2 border-white/70 group-hover:scale-110 transition-transform duration-300">
+                                        <svg class="w-5 h-5 sm:w-6 sm:h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M8 5v14l11-7z"/>
+                                        </svg>
+                                    </div>
+                                </div>
+                                {{-- Video badge --}}
+                                <span class="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-black/70 text-white backdrop-blur-sm pointer-events-none">VIDEO</span>
+                            </div>
+                        @else
+                            {{-- Photo Image (Presisi pas 100% dengan frame tanpa offset dan tanpa overlay memuat) --}}
+                            <img src="{{ $photo->thumbnail_url ?: 'https://lh3.googleusercontent.com/d/' . $photo->drive_file_id . '=w800-rw' }}"
+                                 alt="{{ $photo->nama_file }}"
+                                 loading="lazy"
+                                 class="gallery-img w-full h-auto block object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                                 data-file-id="{{ $photo->drive_file_id }}"
+                                 data-retry="0"
+                                 onload="onImgLoaded(this)"
+                                 onerror="onImgError(this)">
+                        @endif
 
                         <!-- Minimalist Hover Overlay: Judul Foto (Hanya saat hover) -->
                         <div class="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-2.5 sm:p-3 pointer-events-none">
@@ -369,12 +400,21 @@
                 </svg>
             </button>
 
-            <!-- Active Photo Image -->
+            <!-- Active Photo / Video -->
             <div class="max-h-[75vh] sm:max-h-[82vh] max-w-full flex items-center justify-center">
                 <img id="lightbox-img" 
                      src="" 
                      alt="Preview" 
                      class="max-h-[75vh] sm:max-h-[82vh] max-w-full object-contain rounded-lg shadow-2xl transition-opacity duration-200">
+                <video id="lightbox-video"
+                       controls
+                       playsinline
+                       preload="metadata"
+                       class="hidden max-h-[75vh] sm:max-h-[82vh] max-w-full rounded-lg shadow-2xl transition-opacity duration-200 bg-black"
+                       style="max-width:100%;">
+                    <source id="lightbox-video-source" src="" type="video/mp4">
+                    Browser Anda tidak mendukung pemutar video.
+                </video>
             </div>
 
             <!-- Next Button -->
@@ -632,6 +672,8 @@
             title: el.getAttribute('data-title'),
             fullUrl: el.getAttribute('data-full-url'),
             albumId: el.getAttribute('data-album'),
+            mimeType: el.getAttribute('data-mime-type') || 'image/jpeg',
+            isVideo: el.getAttribute('data-is-video') === '1',
         }));
 
         // ============================================================
@@ -888,7 +930,7 @@
                     }).catch(e => console.warn('Log error:', e));
 
                     // Trigger direct Google Drive download
-                    const dlUrl = `https://drive.google.com/uc?export=download&id=${item.fileId}`;
+                    const dlUrl = `https://drive.google.com/uc?export=download&confirm=t&id=${item.fileId}`;
                     triggerDirectDownload(dlUrl, item.title);
 
                     // Wait 400ms before downloading next photo so browser doesn't block popups
@@ -939,13 +981,13 @@
                     return res.json();
                 })
                 .then(data => {
-                    const dlUrl = (data && data.download_url) ? data.download_url : `https://drive.google.com/uc?export=download&id=${fileId}`;
+                    const dlUrl = (data && data.download_url) ? data.download_url : `https://drive.google.com/uc?export=download&confirm=t&id=${fileId}`;
                     triggerDirectDownload(dlUrl, fileName);
                     showToast('✅ Unduhan ' + fileName + ' berhasil dimulai!', '✅');
                 })
                 .catch(err => {
                     console.error('Download error:', err);
-                    const fallbackUrl = "https://drive.google.com/uc?export=download&id=" + fileId;
+                    const fallbackUrl = "https://drive.google.com/uc?export=download&confirm=t&id=" + fileId;
                     triggerDirectDownload(fallbackUrl, fileName);
                     showToast('✅ Unduhan dimulai!', '✅');
                 })
@@ -963,20 +1005,46 @@
 
         /**
          * Memicu download di browser via link tersembunyi
+         * Mendukung Android, iOS, dan Desktop
          */
         function triggerDirectDownload(url, filename) {
-            const tempLink = document.createElement('a');
-            tempLink.href = url;
-            tempLink.setAttribute('download', filename || 'wedding_photo.jpg');
-            tempLink.setAttribute('target', '_blank');
-            tempLink.style.display = 'none';
-            document.body.appendChild(tempLink);
-            tempLink.click();
-            setTimeout(() => {
-                if (tempLink.parentElement) {
-                    document.body.removeChild(tempLink);
+            const isAndroid = /android/i.test(navigator.userAgent);
+            const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+            if (isAndroid) {
+                // Android: window.open lebih reliable daripada anchor click
+                // Tambahkan confirm=... agar bypass virus scan Google Drive
+                let dlUrl = url;
+                // Pastikan format URL download yang benar untuk Android
+                if (dlUrl.includes('drive.google.com/uc')) {
+                    // Sudah benar, lanjutkan
+                } else if (dlUrl.includes('drive.google.com/file/d/')) {
+                    // Convert ke format uc?export=download
+                    const idMatch = dlUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+                    if (idMatch) {
+                        dlUrl = `https://drive.google.com/uc?export=download&id=${idMatch[1]}&confirm=t`;
+                    }
                 }
-            }, 500);
+                window.open(dlUrl, '_blank', 'noopener,noreferrer');
+            } else if (isIOS) {
+                // iOS: buka di tab baru
+                window.open(url, '_blank', 'noopener,noreferrer');
+            } else {
+                // Desktop: anchor click dengan download attribute
+                const tempLink = document.createElement('a');
+                tempLink.href = url;
+                tempLink.setAttribute('download', filename || 'wedding_photo.jpg');
+                tempLink.setAttribute('target', '_blank');
+                tempLink.setAttribute('rel', 'noopener noreferrer');
+                tempLink.style.display = 'none';
+                document.body.appendChild(tempLink);
+                tempLink.click();
+                setTimeout(() => {
+                    if (tempLink.parentElement) {
+                        document.body.removeChild(tempLink);
+                    }
+                }, 500);
+            }
         }
 
         /**
@@ -1031,6 +1099,18 @@
             modal.classList.add('hidden');
             modal.classList.remove('flex');
             document.body.style.overflow = '';
+
+            // Hentikan video & bersihkan iframe saat lightbox ditutup
+            const video = document.getElementById('lightbox-video');
+            if (video) {
+                video.pause();
+                video.src = '';
+            }
+            const iframeContainer = document.getElementById('lightbox-iframe-wrap');
+            if (iframeContainer) {
+                iframeContainer.innerHTML = '';
+                iframeContainer.classList.add('hidden');
+            }
         }
 
         function updateLightboxContent() {
@@ -1038,9 +1118,53 @@
             if (!item) return;
 
             const img = document.getElementById('lightbox-img');
-            img.style.opacity = '0';
-            img.src = item.fullUrl;
-            img.onload = () => { img.style.opacity = '1'; };
+            const video = document.getElementById('lightbox-video');
+            const videoSource = document.getElementById('lightbox-video-source');
+
+            // Stop & reset video sebelum pindah konten
+            if (video) {
+                video.pause();
+                video.src = '';
+                if (videoSource) videoSource.src = '';
+            }
+
+            if (item.isVideo) {
+                // Sembunyikan img & video HTML5 element
+                if (img) img.classList.add('hidden');
+                if (video) video.classList.add('hidden');
+
+                // Gunakan iframe embed Google Drive untuk streaming video
+                const videoUrl = `https://drive.google.com/file/d/${item.fileId}/preview`;
+                const mediaContainer = img ? img.parentElement : null;
+                let iframeContainer = document.getElementById('lightbox-iframe-wrap');
+                if (!iframeContainer) {
+                    iframeContainer = document.createElement('div');
+                    iframeContainer.id = 'lightbox-iframe-wrap';
+                    iframeContainer.className = 'rounded-lg shadow-2xl overflow-hidden bg-black';
+                    iframeContainer.style.width = 'min(80vw, 854px)';
+                    iframeContainer.style.height = 'min(45vw, 480px)';
+                    if (mediaContainer) {
+                        mediaContainer.appendChild(iframeContainer);
+                    }
+                }
+                iframeContainer.innerHTML = `<iframe src="${videoUrl}" width="100%" height="100%" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen style="width:100%;height:100%;border:none;"></iframe>`;
+                iframeContainer.classList.remove('hidden');
+            } else {
+                // Sembunyikan iframe video jika ada
+                const iframeContainer = document.getElementById('lightbox-iframe-wrap');
+                if (iframeContainer) {
+                    iframeContainer.classList.add('hidden');
+                    iframeContainer.innerHTML = '';
+                }
+                if (video) video.classList.add('hidden');
+                // Tampilkan gambar
+                if (img) {
+                    img.classList.remove('hidden');
+                    img.style.opacity = '0';
+                    img.src = item.fullUrl;
+                    img.onload = () => { img.style.opacity = '1'; };
+                }
+            }
 
             document.getElementById('lightbox-title').textContent = item.title;
             document.getElementById('lightbox-counter').textContent = (currentLightboxIndex + 1) + ' / ' + photoItems.length;

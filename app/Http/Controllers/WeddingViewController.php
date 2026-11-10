@@ -28,6 +28,18 @@ class WeddingViewController extends Controller
                 'totalPhotos' => 0,
                 'totalDownloads' => 0,
                 'totalUsers' => 0,
+                'newWeddingsThisMonth' => 0,
+                'publishedCount' => 0,
+                'inReviewCount' => 0,
+                'draftCount' => 0,
+                'avgPhotosPerWedding' => 0,
+                'pinProtectedCount' => 0,
+                'pinProtectedPercent' => 0,
+                'usedGb' => 0,
+                'quotaGb' => 50,
+                'storagePercent' => 0,
+                'freeGb' => 50,
+                'availableYears' => collect(),
             ]);
         }
 
@@ -45,9 +57,61 @@ class WeddingViewController extends Controller
         $weddings = Wedding::with($relations)->latest()->get();
         $totalWeddings = $weddings->count();
         $totalAlbums = Schema::hasTable('albums') ? Album::count() : 0;
-        $totalPhotos = Schema::hasTable('photos') ? Photo::count() : 0;
+        $totalPhotos = Schema::hasTable('photos') ? Photo::whereNull('deleted_at')->count() : 0;
         $totalDownloads = Schema::hasTable('download_logs') ? DownloadLog::count() : 0;
         $totalUsers = Schema::hasTable('users') ? User::count() : 0;
+
+        // Metrik 1: Wedding baru bulan ini
+        $newWeddingsThisMonth = Wedding::whereYear('created_at', now()->year)
+            ->whereMonth('created_at', now()->month)
+            ->count();
+
+        // Metrik 2 & Filter Status: Hitung Published, In Review, dan Draft secara real
+        $publishedCount = 0;
+        $inReviewCount = 0;
+        $draftCount = 0;
+
+        foreach ($weddings as $w) {
+            $pCount = $w->photos ? $w->photos->count() : 0;
+            if ($w->is_published) {
+                $w->computed_status = 'published';
+                $publishedCount++;
+            } elseif ($pCount > 0) {
+                $w->computed_status = 'review';
+                $inReviewCount++;
+            } else {
+                $w->computed_status = 'draft';
+                $draftCount++;
+            }
+        }
+
+        // Metrik 3: PIN Protection real data
+        $pinProtectedCount = $weddings->where('pin_enabled', true)->count();
+        $pinProtectedPercent = $totalWeddings > 0 ? round(($pinProtectedCount / $totalWeddings) * 100) : 0;
+
+        // Metrik 4: Rata-rata foto per wedding
+        $avgPhotosPerWedding = $totalWeddings > 0 ? round($totalPhotos / $totalWeddings) : 0;
+
+        // Metrik 5: Penyimpanan riil (dihitung dari kolom file_size tabel photos)
+        $totalStorageBytes = Schema::hasTable('photos')
+            ? (int) Photo::whereNull('deleted_at')->sum('file_size')
+            : 0;
+
+        $quotaGb = 50; // Kapasitas cloud storage standar
+        $storageQuotaBytes = $quotaGb * 1024 * 1024 * 1024;
+        $usedGb = round($totalStorageBytes / (1024 * 1024 * 1024), 1);
+        $storagePercent = $storageQuotaBytes > 0 ? min(100, round(($totalStorageBytes / $storageQuotaBytes) * 100, 1)) : 0;
+        $freeGb = max(0, round($quotaGb - $usedGb, 1));
+
+        // Tahun yang tersedia dari data wedding riil untuk filter tanggal
+        $availableYears = $weddings->pluck('wedding_date')
+            ->filter()
+            ->map(function ($date) {
+                return $date instanceof \Carbon\Carbon ? $date->format('Y') : \Carbon\Carbon::parse($date)->format('Y');
+            })
+            ->unique()
+            ->sortDesc()
+            ->values();
 
         return view('weddings.index', compact(
             'weddings',
@@ -55,7 +119,19 @@ class WeddingViewController extends Controller
             'totalAlbums',
             'totalPhotos',
             'totalDownloads',
-            'totalUsers'
+            'totalUsers',
+            'newWeddingsThisMonth',
+            'publishedCount',
+            'inReviewCount',
+            'draftCount',
+            'avgPhotosPerWedding',
+            'pinProtectedCount',
+            'pinProtectedPercent',
+            'usedGb',
+            'quotaGb',
+            'storagePercent',
+            'freeGb',
+            'availableYears'
         ));
     }
 
@@ -317,7 +393,7 @@ class WeddingViewController extends Controller
         $clientTime = request()->input('client_time') ?: request()->query('client_time');
         $googleDrive->recordDownload($wedding, $fileId, $fileName, request()->ip(), $clientTime);
 
-        return redirect()->away("https://drive.google.com/uc?export=download&id={$fileId}");
+        return redirect()->away("https://drive.google.com/uc?export=download&confirm=t&id={$fileId}");
     }
 
     /**

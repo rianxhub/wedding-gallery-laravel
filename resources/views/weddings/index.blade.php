@@ -65,7 +65,7 @@
         </div>
     </div>
 
-    <!-- 4 KPI / Metric Cards (Figma Exact Spec) -->
+    <!-- 4 KPI / Metric Cards (Real Data Specification) -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <!-- Card 1: Active Galleries -->
         <div class="p-5 bg-white border border-slate-200/80 rounded-2xl shadow-xs flex flex-col justify-between">
@@ -80,11 +80,15 @@
             <div class="mt-4 flex items-baseline gap-2.5">
                 <span class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $totalWeddings }}</span>
                 <span class="text-xs font-semibold text-emerald-700 flex items-center gap-0.5">
-                    ↑+{{ $totalWeddings > 0 ? 3 : 0 }} this month
+                    @if($newWeddingsThisMonth > 0)
+                        ↑+{{ $newWeddingsThisMonth }} this month
+                    @else
+                        0 this month
+                    @endif
                 </span>
             </div>
             <div class="mt-3 text-xs text-slate-500 font-medium">
-                {{ $totalWeddings }} Published &bull; {{ $totalAlbums }} Albums &bull; {{ $totalUsers }} Users
+                {{ $publishedCount }} Published &bull; {{ $totalAlbums }} Albums &bull; {{ $totalUsers }} Users
             </div>
         </div>
 
@@ -103,7 +107,7 @@
                 <span class="text-xs font-semibold text-slate-500">High-Res RAW</span>
             </div>
             <div class="mt-3 text-xs text-slate-500 font-medium">
-                Avg {{ $totalWeddings > 0 ? round($totalPhotos / max(1, $totalWeddings)) : 0 }} captures per wedding
+                Avg {{ $avgPhotosPerWedding }} captures per wedding
             </div>
         </div>
 
@@ -118,11 +122,15 @@
                 </div>
             </div>
             <div class="mt-4 flex items-baseline gap-2.5">
-                <span class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $totalWeddings }} Active</span>
-                <span class="text-xs font-semibold text-teal-700">100% Protected</span>
+                <span class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $pinProtectedCount }} Active</span>
+                <span class="text-xs font-semibold text-teal-700">{{ $pinProtectedPercent }}% Protected</span>
             </div>
             <div class="mt-3 text-xs text-slate-500 font-medium">
-                Client security standard enabled
+                @if($pinProtectedPercent === 100)
+                    Client security standard enabled
+                @else
+                    {{ $totalWeddings - $pinProtectedCount }} galleries without PIN
+                @endif
             </div>
         </div>
 
@@ -136,79 +144,91 @@
                     </svg>
                 </div>
             </div>
-            @php
-                $approxGb = round(($totalPhotos * 3.5) / 1024, 1);
-                $percent = max(4, min(95, round(($approxGb / 50) * 100, 1)));
-            @endphp
             <div class="mt-4 flex items-baseline justify-between">
                 <div class="flex items-baseline gap-1.5">
-                    <span class="text-2xl font-extrabold text-slate-900 tracking-tight">{{ $approxGb }} GB</span>
-                    <span class="text-xs text-slate-500">of 50 GB</span>
+                    <span class="text-2xl font-extrabold text-slate-900 tracking-tight">{{ $usedGb }} GB</span>
+                    <span class="text-xs text-slate-500">of {{ $quotaGb }} GB</span>
                 </div>
                 <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
-                    {{ $percent }}%
+                    {{ $storagePercent }}%
                 </span>
             </div>
             <!-- Progress Bar -->
             <div class="mt-2 w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                <div class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full" style="width: {{ $percent }}%;"></div>
+                <div class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500" style="width: {{ max(4, min(100, $storagePercent)) }}%;"></div>
             </div>
             <div class="mt-2 text-xs text-slate-400 font-medium">
-                {{ round(50 - $approxGb, 1) }} GB free
+                {{ $freeGb }} GB free
             </div>
         </div>
     </div>
 
-    <!-- Filter Pills & Sorting Controls -->
+    <!-- Filter Pills & Sorting Controls (Real Data Integration) -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
         <!-- Status Filter Pills -->
-        <div class="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+        <div class="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0" id="status-filter-pills">
             <button type="button" 
-                    onclick="filterTableStatus('all')" 
-                    class="filter-pill active px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#1B4D3E] text-white shadow-xs transition">
+                    onclick="filterTableStatus('all', this)" 
+                    data-status="all"
+                    class="filter-pill active px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#1B4D3E] text-white shadow-xs transition cursor-pointer">
                 All ({{ $totalWeddings }})
             </button>
             <button type="button" 
-                    onclick="filterTableStatus('published')" 
-                    class="filter-pill px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:border-slate-300 transition">
-                Published ({{ $totalWeddings }})
+                    onclick="filterTableStatus('published', this)" 
+                    data-status="published"
+                    class="filter-pill px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:border-slate-300 transition cursor-pointer">
+                Published ({{ $publishedCount }})
             </button>
             <button type="button" 
-                    onclick="filterTableStatus('review')" 
-                    class="filter-pill px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:border-slate-300 transition">
-                In Review (0)
+                    onclick="filterTableStatus('review', this)" 
+                    data-status="review"
+                    class="filter-pill px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:border-slate-300 transition cursor-pointer">
+                In Review ({{ $inReviewCount }})
             </button>
             <button type="button" 
-                    onclick="filterTableStatus('draft')" 
-                    class="filter-pill px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:border-slate-300 transition">
-                Draft (0)
+                    onclick="filterTableStatus('draft', this)" 
+                    data-status="draft"
+                    class="filter-pill px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:border-slate-300 transition cursor-pointer">
+                Draft ({{ $draftCount }})
             </button>
         </div>
 
         <!-- Date & Sorting Controls -->
-        <div class="flex items-center gap-2.5">
+        <div class="flex flex-wrap items-center gap-2.5">
+            <!-- Filter Tanggal Real Data Dropdown -->
             <div class="relative">
-                <button type="button" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition">
-                    <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition shadow-2xs">
+                    <svg class="w-3.5 h-3.5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                     </svg>
-                    <span>All Dates ({{ date('Y') }})</span>
-                    <svg class="w-3 h-3 text-slate-400 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                    </svg>
-                </button>
+                    <select id="date-filter-select" onchange="handleDateFilterChange(this.value)" class="bg-transparent border-none text-xs font-semibold text-slate-700 focus:outline-none focus:ring-0 cursor-pointer pr-1">
+                        <option value="all">All Dates (Semua)</option>
+                        @foreach($availableYears as $year)
+                            <option value="year_{{ $year }}">Tahun {{ $year }}</option>
+                        @endforeach
+                        <option value="this_month">Bulan Ini</option>
+                        <option value="upcoming">Mendatang (Upcoming)</option>
+                        <option value="past">Telah Lewat (Past)</option>
+                    </select>
+                </div>
             </div>
 
+            <!-- Sorting Real Data Dropdown -->
             <div class="relative">
-                <button type="button" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition">
-                    <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition shadow-2xs">
+                    <svg class="w-3.5 h-3.5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
                     </svg>
-                    <span>Sort: Event Date (Desc)</span>
-                    <svg class="w-3 h-3 text-slate-400 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                    </svg>
-                </button>
+                    <select id="sort-select" onchange="handleSortChange(this.value)" class="bg-transparent border-none text-xs font-semibold text-slate-700 focus:outline-none focus:ring-0 cursor-pointer pr-1">
+                        <option value="date_desc">Sort: Event Date (Terbaru)</option>
+                        <option value="date_asc">Sort: Event Date (Terlama)</option>
+                        <option value="name_asc">Sort: Nama Pasangan (A - Z)</option>
+                        <option value="name_desc">Sort: Nama Pasangan (Z - A)</option>
+                        <option value="photos_desc">Sort: Jumlah Foto (Terbanyak)</option>
+                        <option value="photos_asc">Sort: Jumlah Foto (Tersedikit)</option>
+                        <option value="created_desc">Sort: Terakhir Dibuat</option>
+                    </select>
+                </div>
             </div>
         </div>
     </div>
@@ -251,7 +271,14 @@
                             $firstPhoto = $wedding->photos->first();
                             $coupleCover = $firstPhoto ? $firstPhoto->thumbnail_url : $fallbackPhoto;
                         @endphp
-                        <tr class="wedding-row hover:bg-slate-50/70 transition" data-name="{{ strtolower($wedding->couple_name) }}" data-slug="{{ strtolower($wedding->slug) }}">
+                        <tr class="wedding-row hover:bg-slate-50/70 transition" 
+                            data-name="{{ strtolower($wedding->couple_name) }}" 
+                            data-slug="{{ strtolower($wedding->slug) }}"
+                            data-status="{{ $wedding->computed_status }}"
+                            data-date="{{ $wedding->wedding_date ? $wedding->wedding_date->format('Y-m-d') : '' }}"
+                            data-year="{{ $wedding->wedding_date ? $wedding->wedding_date->format('Y') : '' }}"
+                            data-photos="{{ $wedding->photos ? $wedding->photos->count() : 0 }}"
+                            data-created="{{ $wedding->created_at ? $wedding->created_at->timestamp : 0 }}">
                             <td class="py-4 pl-5 pr-2">
                                 <input type="checkbox" class="w-4 h-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700">
                             </td>
@@ -299,7 +326,7 @@
 
                             <!-- Photos & Size -->
                             <td class="py-4 px-3 whitespace-nowrap text-center">
-                                <span class="font-semibold text-slate-900 text-xs">{{ $wedding->photos->count() }} foto</span>
+                                <span class="font-semibold text-slate-900 text-xs">{{ $wedding->photos ? $wedding->photos->count() : 0 }} foto</span>
                                 <span class="text-[11px] font-mono text-emerald-800 font-bold block">{{ $wedding->formatted_total_size }}</span>
                             </td>
 
@@ -311,17 +338,60 @@
                                 </div>
                             </td>
 
-                            <!-- Status -->
+                            <!-- Status Real Data (Published, In Review, Draft) -->
                             <td class="py-4 px-3 whitespace-nowrap">
-                                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/80">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                                    Published
-                                </span>
+                                @if($wedding->computed_status === 'published')
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/80">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                                        Published
+                                    </span>
+                                @elseif($wedding->computed_status === 'review')
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200/80" title="Foto sudah disinkronisasi, siap direview">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                        In Review
+                                    </span>
+                                @else
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200" title="Draft (Belum dipublikasikan)">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                        Draft
+                                    </span>
+                                @endif
                             </td>
 
                             <!-- Actions -->
                             <td class="py-4 pr-5 pl-3 whitespace-nowrap text-right">
                                 <div class="inline-flex items-center gap-1 text-slate-400">
+                                    <!-- Quick Toggle Publish / Unpublish -->
+                                    @if($wedding->is_published)
+                                        <form action="{{ route('weddings.unpublish', $wedding->slug) }}" 
+                                              method="POST" 
+                                              class="inline-block"
+                                              onsubmit="return confirm('Ubah status galeri \'{{ addslashes($wedding->couple_name) }}\' ke Draft / Unpublished?')">
+                                            @csrf
+                                            <button type="submit" 
+                                                    class="p-1.5 hover:text-amber-700 hover:bg-amber-50 rounded-md transition" 
+                                                    title="Tarik dari Publikasi (Unpublish)">
+                                                <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/>
+                                                </svg>
+                                            </button>
+                                        </form>
+                                    @else
+                                        <form action="{{ route('weddings.publish', $wedding->slug) }}" 
+                                              method="POST" 
+                                              class="inline-block"
+                                              onsubmit="return confirm('Publikasikan galeri \'{{ addslashes($wedding->couple_name) }}\' agar dapat diakses tamu?')">
+                                            @csrf
+                                            <button type="submit" 
+                                                    class="p-1.5 hover:text-emerald-700 hover:bg-emerald-50 rounded-md transition" 
+                                                    title="Publikasikan Galeri (Publish)">
+                                                <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                                </svg>
+                                            </button>
+                                        </form>
+                                    @endif
+
                                     <!-- View Gallery -->
                                     <a href="{{ url('/' . $wedding->slug) }}" 
                                        target="_blank"
@@ -390,22 +460,14 @@
             </table>
         </div>
 
-        <!-- Table Footer / Pagination -->
+        <!-- Table Footer / Pagination Counter -->
         <div class="px-5 py-3.5 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
             <div>
-                Showing <span class="font-semibold text-slate-800">1</span> to <span class="font-semibold text-slate-800">{{ $weddings->count() }}</span> of <span class="font-semibold text-slate-800">{{ $totalWeddings }}</span> weddings
+                Menampilkan <span class="font-semibold text-slate-800" id="table-showing-count">{{ $weddings->count() }}</span> dari <span class="font-semibold text-slate-800">{{ $totalWeddings }}</span> galeri pernikahan
             </div>
 
             <div class="flex items-center gap-1.5">
-                <button type="button" class="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 font-semibold hover:bg-slate-50 transition">
-                    Previous
-                </button>
-                <button type="button" class="px-3 py-1.5 rounded-lg bg-[#1B4D3E] text-white font-semibold shadow-xs">
-                    1
-                </button>
-                <button type="button" class="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 font-semibold hover:bg-slate-50 transition">
-                    Next
-                </button>
+                <span class="text-[11px] text-slate-400">Status realtime tersinkronisasi</span>
             </div>
         </div>
     </div>
@@ -441,23 +503,126 @@
         document.body.removeChild(downloadLink);
     }
 
-    function filterTableStatus(status) {
-        document.querySelectorAll('.filter-pill').forEach(el => {
-            el.classList.remove('bg-[#1B4D3E]', 'text-white');
+    // ============================================================
+    // REAL DATA FILTERING & SORTING ENGINE
+    // ============================================================
+    let currentStatusFilter = 'all';
+    let currentDateFilter = 'all';
+    let currentSortMode = 'date_desc';
+
+    function filterTableStatus(status, btnElement) {
+        currentStatusFilter = status;
+
+        // Update styling filter pills
+        document.querySelectorAll('#status-filter-pills .filter-pill').forEach(el => {
+            el.classList.remove('bg-[#1B4D3E]', 'text-white', 'shadow-xs');
             el.classList.add('bg-white', 'text-slate-600', 'border', 'border-slate-200');
         });
-        event.target.classList.remove('bg-white', 'text-slate-600', 'border', 'border-slate-200');
-        event.target.classList.add('bg-[#1B4D3E]', 'text-white');
 
-        // Simple client row filter
-        const rows = document.querySelectorAll('.wedding-row');
-        rows.forEach(r => {
-            if (status === 'all' || status === 'published') {
-                r.style.display = '';
+        const activeBtn = btnElement || document.querySelector(`#status-filter-pills [data-status="${status}"]`);
+        if (activeBtn) {
+            activeBtn.classList.remove('bg-white', 'text-slate-600', 'border', 'border-slate-200');
+            activeBtn.classList.add('bg-[#1B4D3E]', 'text-white', 'shadow-xs');
+        }
+
+        applyFiltersAndSort();
+    }
+
+    function handleDateFilterChange(val) {
+        currentDateFilter = val;
+        applyFiltersAndSort();
+    }
+
+    function handleSortChange(val) {
+        currentSortMode = val;
+        applyFiltersAndSort();
+    }
+
+    function applyFiltersAndSort() {
+        const tbody = document.querySelector("#weddings-data-table tbody");
+        if (!tbody) return;
+
+        const rows = Array.from(tbody.querySelectorAll("tr.wedding-row"));
+        const searchInput = document.getElementById('global-studio-search');
+        const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+        const currentYearMonth = `${currentYear}-${currentMonth}`;
+        const todayStr = now.toISOString().slice(0, 10);
+
+        let visibleCount = 0;
+
+        // 1. Terapkan Filter
+        rows.forEach(row => {
+            const rowStatus = row.getAttribute('data-status') || '';
+            const rowDate = row.getAttribute('data-date') || '';
+            const rowYear = row.getAttribute('data-year') || '';
+            const rowName = row.getAttribute('data-name') || '';
+            const rowSlug = row.getAttribute('data-slug') || '';
+
+            // Status Match (all / published / review / draft)
+            let statusMatch = (currentStatusFilter === 'all') || (rowStatus === currentStatusFilter);
+
+            // Date Match
+            let dateMatch = true;
+            if (currentDateFilter === 'all') {
+                dateMatch = true;
+            } else if (currentDateFilter.startsWith('year_')) {
+                const targetYear = currentDateFilter.replace('year_', '');
+                dateMatch = (rowYear === targetYear);
+            } else if (currentDateFilter === 'this_month') {
+                dateMatch = rowDate.startsWith(currentYearMonth);
+            } else if (currentDateFilter === 'upcoming') {
+                dateMatch = Boolean(rowDate && rowDate >= todayStr);
+            } else if (currentDateFilter === 'past') {
+                dateMatch = Boolean(rowDate && rowDate < todayStr);
+            }
+
+            // Search Match
+            let searchMatch = true;
+            if (query) {
+                searchMatch = rowName.includes(query) || rowSlug.includes(query);
+            }
+
+            const isVisible = statusMatch && dateMatch && searchMatch;
+            if (isVisible) {
+                row.style.display = '';
+                visibleCount++;
             } else {
-                r.style.display = 'none';
+                row.style.display = 'none';
             }
         });
+
+        // 2. Terapkan Sorting
+        rows.sort((a, b) => {
+            if (currentSortMode === 'date_desc') {
+                return (b.getAttribute('data-date') || '').localeCompare(a.getAttribute('data-date') || '');
+            } else if (currentSortMode === 'date_asc') {
+                return (a.getAttribute('data-date') || '').localeCompare(b.getAttribute('data-date') || '');
+            } else if (currentSortMode === 'name_asc') {
+                return (a.getAttribute('data-name') || '').localeCompare(b.getAttribute('data-name') || '');
+            } else if (currentSortMode === 'name_desc') {
+                return (b.getAttribute('data-name') || '').localeCompare(a.getAttribute('data-name') || '');
+            } else if (currentSortMode === 'photos_desc') {
+                return parseInt(b.getAttribute('data-photos') || '0') - parseInt(a.getAttribute('data-photos') || '0');
+            } else if (currentSortMode === 'photos_asc') {
+                return parseInt(a.getAttribute('data-photos') || '0') - parseInt(b.getAttribute('data-photos') || '0');
+            } else if (currentSortMode === 'created_desc') {
+                return parseInt(b.getAttribute('data-created') || '0') - parseInt(a.getAttribute('data-created') || '0');
+            }
+            return 0;
+        });
+
+        // Render kembali urutan baris ke tabel
+        rows.forEach(row => tbody.appendChild(row));
+
+        // Update counter baris di footer tabel
+        const showingCountEl = document.getElementById('table-showing-count');
+        if (showingCountEl) {
+            showingCountEl.textContent = visibleCount;
+        }
     }
 
     // Connect global search input
@@ -465,16 +630,7 @@
         const searchInput = document.getElementById('global-studio-search');
         if (searchInput) {
             searchInput.addEventListener('input', function() {
-                const query = this.value.toLowerCase().trim();
-                document.querySelectorAll('.wedding-row').forEach(row => {
-                    const name = row.getAttribute('data-name') || '';
-                    const slug = row.getAttribute('data-slug') || '';
-                    if (name.includes(query) || slug.includes(query)) {
-                        row.style.display = '';
-                    } else {
-                        row.style.display = 'none';
-                    }
-                });
+                applyFiltersAndSort();
             });
         }
     });
